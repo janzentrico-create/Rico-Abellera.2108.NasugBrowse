@@ -61,6 +61,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.json.JSONArray
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -98,19 +99,100 @@ class HistoricalSite(id: Int, name: String, location: String, baseCost: Double, 
 class AdventureSpot(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, difficulty: String, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Adventure"; override fun icon() = Icons.Default.Terrain }
 class Restaurant(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, cuisine: String, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Food"; override fun icon() = Icons.Default.Restaurant }
 
-class PlannerSystem(val ownerName: String, val ownerEmail: String) {
+// UPDATED: Added Local Storage (SharedPreferences)
+class PlannerSystem(val ownerName: String, val ownerEmail: String, private val context: Context) {
     val scheduledVisits = mutableStateListOf<ScheduledVisit>()
     val favoriteDestinations = mutableStateListOf<Destination>()
+
+    fun loadSavedState(allDestinations: List<Destination>) {
+        val prefs = context.getSharedPreferences("NasugBrowseData", Context.MODE_PRIVATE)
+        val jsonStr = prefs.getString("planner_data_$ownerEmail", null) ?: return
+        try {
+            val json = JSONObject(jsonStr)
+
+            val favArray = json.optJSONArray("favorites")
+            if (favArray != null) {
+                favoriteDestinations.clear()
+                for (i in 0 until favArray.length()) {
+                    val id = favArray.getInt(i)
+                    allDestinations.find { it.id == id }?.let { favoriteDestinations.add(it) }
+                }
+            }
+
+            val visitsArray = json.optJSONArray("visits")
+            if (visitsArray != null) {
+                scheduledVisits.clear()
+                for (i in 0 until visitsArray.length()) {
+                    val visitObj = visitsArray.getJSONObject(i)
+                    val destId = visitObj.getInt("destId")
+                    val dateMillis = visitObj.getLong("dateMillis")
+                    val time = visitObj.getString("time")
+
+                    val activitiesArray = visitObj.optJSONArray("activities")
+                    val acts = mutableListOf<Activity>()
+                    if (activitiesArray != null) {
+                        for (j in 0 until activitiesArray.length()) {
+                            val actObj = activitiesArray.getJSONObject(j)
+                            acts.add(Activity(actObj.getString("name"), actObj.getDouble("price")))
+                        }
+                    }
+
+                    allDestinations.find { it.id == destId }?.let {
+                        scheduledVisits.add(ScheduledVisit(it, Date(dateMillis), time, acts))
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    private fun saveState() {
+        val prefs = context.getSharedPreferences("NasugBrowseData", Context.MODE_PRIVATE)
+        val json = JSONObject()
+
+        val favArray = JSONArray()
+        favoriteDestinations.forEach { favArray.put(it.id) }
+        json.put("favorites", favArray)
+
+        val visitsArray = JSONArray()
+        scheduledVisits.forEach { visit ->
+            val visitObj = JSONObject()
+            visitObj.put("destId", visit.destination.id)
+            visitObj.put("dateMillis", visit.date.time)
+            visitObj.put("time", visit.time)
+
+            val actsArray = JSONArray()
+            visit.selectedActivities.forEach { act ->
+                val actObj = JSONObject()
+                actObj.put("name", act.name)
+                actObj.put("price", act.price)
+                actsArray.put(actObj)
+            }
+            visitObj.put("activities", actsArray)
+            visitsArray.put(visitObj)
+        }
+        json.put("visits", visitsArray)
+
+        prefs.edit().putString("planner_data_$ownerEmail", json.toString()).apply()
+    }
 
     fun addVisit(dest: Destination, date: Date, time: String, activities: List<Activity>) {
         if (scheduledVisits.none { it.destination.id == dest.id }) {
             scheduledVisits.add(ScheduledVisit(dest, date, time, activities))
+            saveState()
         }
     }
-    fun removeVisit(dest: Destination) { scheduledVisits.removeAll { it.destination.id == dest.id } }
+
+    fun removeVisit(dest: Destination) {
+        scheduledVisits.removeAll { it.destination.id == dest.id }
+        saveState()
+    }
+
     fun toggleFavorite(dest: Destination) {
         if (favoriteDestinations.any { it.id == dest.id }) favoriteDestinations.removeAll { it.id == dest.id }
         else favoriteDestinations.add(dest)
+        saveState()
     }
 }
 
@@ -219,7 +301,7 @@ object CloudServices {
     }
 
     suspend fun fetchWeather(lat: Double, lon: Double): WeatherInfo = withContext(Dispatchers.IO) {
-        val apiKey = "YOUR_OPENWEATHER_API_KEY" // Optional
+        val apiKey = "YOUR_OPENWEATHER_API_KEY"
         try {
             val url = URL("https://api.openweathermap.org/data/2.5/weather?lat=$lat&lon=$lon&appid=$apiKey&units=metric")
             val connection = url.openConnection() as HttpURLConnection
@@ -270,7 +352,8 @@ class MainActivity : ComponentActivity() {
                     SplashScreen()
                 } else {
                     if (isLoggedIn) {
-                        val planner = remember { PlannerSystem(authManager.getUserName(), authManager.getUserEmail()) }
+                        // Pass context to PlannerSystem
+                        val planner = remember { PlannerSystem(authManager.getUserName(), authManager.getUserEmail(), context) }
                         MainApp(planner, isDarkMode, onToggleTheme = { isDarkMode = !isDarkMode }, onLogout = { authManager.logout(); isLoggedIn = false })
                     } else {
                         AuthScreen(authManager) { isLoggedIn = true }
@@ -368,6 +451,8 @@ fun MainApp(planner: PlannerSystem, isDarkMode: Boolean, onToggleTheme: () -> Un
 
     LaunchedEffect(Unit) {
         allDestinations = CloudServices.fetchDestinationsFromCMS()
+        // LOAD SAVED DATA AFTER FETCHING DESTINATIONS
+        planner.loadSavedState(allDestinations)
         isDestinationsLoading = false
     }
 
@@ -516,7 +601,7 @@ fun DestinationCard(dest: Destination, isAdded: Boolean, isFav: Boolean, onClick
 }
 
 // =====================================================
-// 7. ITINERARY (SHOWS ACTIVITIES)
+// 7. ITINERARY
 // =====================================================
 @Composable
 fun ItineraryScreen(planner: PlannerSystem, onDetails: (Destination) -> Unit) {
@@ -635,7 +720,6 @@ fun ScheduleDestinationDialog(destination: Destination, onDismiss: () -> Unit, o
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss: () -> Unit) {
-    // Context extracted here to prevent composable errors inside onClick
     val context = LocalContext.current
 
     var showAddReview by remember { mutableStateOf(false) }
@@ -705,7 +789,6 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
                     onClick = {
                         val gmmIntentUri = android.net.Uri.parse("google.navigation:q=${dest.latitude},${dest.longitude}")
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply { setPackage("com.google.android.apps.maps") }
-                        // USING THE EXTRACTED 'context' VARIABLE HERE
                         if (mapIntent.resolveActivity(context.packageManager) != null) {
                             context.startActivity(mapIntent)
                         } else {
@@ -745,36 +828,52 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
 }
 
 // =====================================================
-// 10. HELPERS & OTHER SCREENS
+// 10. FIXED TIME PICKER (Clickable AM/PM)
 // =====================================================
 @Composable
 fun CustomTimePickerDialog(onDismiss: () -> Unit, onTimeSelected: (String) -> Unit) {
     val hours = (1..12).toList()
     val minutes = (0..59).map { String.format("%02d", it) }
-    val periods = listOf("AM", "PM")
-    val hourState = rememberLazyListState(initialFirstVisibleItemIndex = 9)
-    val minuteState = rememberLazyListState(initialFirstVisibleItemIndex = 0)
-    val periodState = rememberLazyListState(initialFirstVisibleItemIndex = 0)
+    var selectedPeriod by remember { mutableStateOf("AM") }
+
+    val hourState = rememberLazyListState(initialFirstVisibleItemIndex = 9) // Defaults to 10
+    val minuteState = rememberLazyListState(initialFirstVisibleItemIndex = 0) // Defaults to 00
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
         Card(shape = RoundedCornerShape(16.dp)) {
             Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Set Start Time", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
-                Row(modifier = Modifier.height(120.dp), horizontalArrangement = Arrangement.Center) {
+
+                Row(modifier = Modifier.height(120.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
                     WheelPicker(items = hours, state = hourState, modifier = Modifier.weight(1f))
-                    Text(":", fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.CenterVertically).padding(horizontal = 8.dp))
+                    Text(":", fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
                     WheelPicker(items = minutes, state = minuteState, modifier = Modifier.weight(1f))
-                    WheelPicker(items = periods, state = periodState, modifier = Modifier.weight(1f))
+
+                    // Clickable AM/PM instead of scroll wheel
+                    Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("AM",
+                            fontSize = if (selectedPeriod == "AM") 24.sp else 18.sp,
+                            fontWeight = if (selectedPeriod == "AM") FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedPeriod == "AM") MaterialTheme.colorScheme.primary else TextGray,
+                            modifier = Modifier.clickable { selectedPeriod = "AM" }.padding(8.dp)
+                        )
+                        Text("PM",
+                            fontSize = if (selectedPeriod == "PM") 24.sp else 18.sp,
+                            fontWeight = if (selectedPeriod == "PM") FontWeight.Bold else FontWeight.Normal,
+                            color = if (selectedPeriod == "PM") MaterialTheme.colorScheme.primary else TextGray,
+                            modifier = Modifier.clickable { selectedPeriod = "PM" }.padding(8.dp)
+                        )
+                    }
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
                     Button(onClick = {
                         val h = hours.getOrElse(hourState.firstVisibleItemIndex) { 10 }
                         val m = minutes.getOrElse(minuteState.firstVisibleItemIndex) { 0 }
-                        val p = periods.getOrElse(periodState.firstVisibleItemIndex) { "AM" }
-                        onTimeSelected(String.format("%02d:%s %s", h, m, p))
+                        onTimeSelected(String.format("%02d:%s %s", h, m, selectedPeriod))
                     }, modifier = Modifier.padding(start = 8.dp)) { Text("OK") }
                 }
             }
@@ -784,22 +883,24 @@ fun CustomTimePickerDialog(onDismiss: () -> Unit, onTimeSelected: (String) -> Un
 
 @Composable
 fun <T> WheelPicker(items: List<T>, state: androidx.compose.foundation.lazy.LazyListState, modifier: Modifier = Modifier) {
-    Box(modifier = modifier.fillMaxHeight(), contentAlignment = Alignment.Center) {
-        LazyColumn(state = state, modifier = Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally, contentPadding = PaddingValues(vertical = 44.dp)) {
+    Box(modifier = modifier.height(120.dp), contentAlignment = Alignment.Center) {
+        LazyColumn(
+            state = state,
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            contentPadding = PaddingValues(vertical = 48.dp) // Adjusted to ensure scrolling works properly
+        ) {
             items(items.size) { index ->
                 val isSelected = state.firstVisibleItemIndex == index
                 Text(
                     text = items[index].toString(), fontSize = if (isSelected) 24.sp else 18.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
                     color = if (isSelected) MaterialTheme.colorScheme.primary else TextGray,
-                    modifier = Modifier.padding(vertical = 4.dp).graphicsLayer {
-                        val offset = (state.firstVisibleItemScrollOffset / 100f).coerceIn(0f, 1f)
-                        alpha = if (isSelected) 1f else 0.5f
-                    }
+                    modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
         }
-        Box(modifier = Modifier.fillMaxWidth().height(36.dp).border(1.dp, TextGray.copy(alpha=0.3f), RoundedCornerShape(8.dp)))
+        Box(modifier = Modifier.fillMaxWidth().height(36.dp).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha=0.5f), RoundedCornerShape(8.dp)))
     }
 }
 
