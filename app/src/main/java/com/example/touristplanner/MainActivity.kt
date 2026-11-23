@@ -14,6 +14,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -80,6 +81,31 @@ val TextGray = Color(0xFF64748B)
 val LightColors = lightColorScheme(primary = PrimaryBlue, secondary = AccentOrange, background = BgLight, surface = Color.White, onSurface = TextDark)
 val DarkColors = darkColorScheme(primary = Color(0xFF60A5FA), secondary = AccentOrange, background = Color(0xFF0F172A), surface = Color(0xFF1E293B), onSurface = Color(0xFFF1F5F9))
 
+// GLASSMORPHISM CONSTANTS
+val GlassWhite = Color.White.copy(alpha = 0.65f)
+val GlassDark = Color.Black.copy(alpha = 0.45f)
+val GlassBorderLight = Color.White.copy(alpha = 0.8f)
+val GlassBorderDark = Color.White.copy(alpha = 0.2f)
+
+@Composable
+fun GlassCard(
+    modifier: Modifier = Modifier,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
+    Card(
+        modifier = modifier,
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDark) GlassDark else GlassWhite
+        ),
+        border = BorderStroke(1.dp, if (isDark) GlassBorderDark else GlassBorderLight),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp) // Flat, relying on the border for definition
+    ) {
+        Column(modifier = Modifier.padding(16.dp), content = content)
+    }
+}
+
 data class Review(val author: String, val rating: Int, val comment: String)
 data class Activity(val name: String, val price: Double)
 data class WeatherInfo(val temp: String, val condition: String, val icon: ImageVector)
@@ -99,7 +125,6 @@ class HistoricalSite(id: Int, name: String, location: String, baseCost: Double, 
 class AdventureSpot(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, difficulty: String, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Adventure"; override fun icon() = Icons.Default.Terrain }
 class Restaurant(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, cuisine: String, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Food"; override fun icon() = Icons.Default.Restaurant }
 
-// UPDATED: Added Local Storage (SharedPreferences)
 class PlannerSystem(val ownerName: String, val ownerEmail: String, private val context: Context) {
     val scheduledVisits = mutableStateListOf<ScheduledVisit>()
     val favoriteDestinations = mutableStateListOf<Destination>()
@@ -109,16 +134,13 @@ class PlannerSystem(val ownerName: String, val ownerEmail: String, private val c
         val jsonStr = prefs.getString("planner_data_$ownerEmail", null) ?: return
         try {
             val json = JSONObject(jsonStr)
-
             val favArray = json.optJSONArray("favorites")
             if (favArray != null) {
                 favoriteDestinations.clear()
                 for (i in 0 until favArray.length()) {
-                    val id = favArray.getInt(i)
-                    allDestinations.find { it.id == id }?.let { favoriteDestinations.add(it) }
+                    allDestinations.find { it.id == favArray.getInt(i) }?.let { favoriteDestinations.add(it) }
                 }
             }
-
             val visitsArray = json.optJSONArray("visits")
             if (visitsArray != null) {
                 scheduledVisits.clear()
@@ -127,7 +149,6 @@ class PlannerSystem(val ownerName: String, val ownerEmail: String, private val c
                     val destId = visitObj.getInt("destId")
                     val dateMillis = visitObj.getLong("dateMillis")
                     val time = visitObj.getString("time")
-
                     val activitiesArray = visitObj.optJSONArray("activities")
                     val acts = mutableListOf<Activity>()
                     if (activitiesArray != null) {
@@ -136,32 +157,24 @@ class PlannerSystem(val ownerName: String, val ownerEmail: String, private val c
                             acts.add(Activity(actObj.getString("name"), actObj.getDouble("price")))
                         }
                     }
-
-                    allDestinations.find { it.id == destId }?.let {
-                        scheduledVisits.add(ScheduledVisit(it, Date(dateMillis), time, acts))
-                    }
+                    allDestinations.find { it.id == destId }?.let { scheduledVisits.add(ScheduledVisit(it, Date(dateMillis), time, acts)) }
                 }
             }
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
+        } catch (e: Exception) { e.printStackTrace() }
     }
 
     private fun saveState() {
         val prefs = context.getSharedPreferences("NasugBrowseData", Context.MODE_PRIVATE)
         val json = JSONObject()
-
         val favArray = JSONArray()
         favoriteDestinations.forEach { favArray.put(it.id) }
         json.put("favorites", favArray)
-
         val visitsArray = JSONArray()
         scheduledVisits.forEach { visit ->
             val visitObj = JSONObject()
             visitObj.put("destId", visit.destination.id)
             visitObj.put("dateMillis", visit.date.time)
             visitObj.put("time", visit.time)
-
             val actsArray = JSONArray()
             visit.selectedActivities.forEach { act ->
                 val actObj = JSONObject()
@@ -173,7 +186,6 @@ class PlannerSystem(val ownerName: String, val ownerEmail: String, private val c
             visitsArray.put(visitObj)
         }
         json.put("visits", visitsArray)
-
         prefs.edit().putString("planner_data_$ownerEmail", json.toString()).apply()
     }
 
@@ -183,12 +195,7 @@ class PlannerSystem(val ownerName: String, val ownerEmail: String, private val c
             saveState()
         }
     }
-
-    fun removeVisit(dest: Destination) {
-        scheduledVisits.removeAll { it.destination.id == dest.id }
-        saveState()
-    }
-
+    fun removeVisit(dest: Destination) { scheduledVisits.removeAll { it.destination.id == dest.id }; saveState() }
     fun toggleFavorite(dest: Destination) {
         if (favoriteDestinations.any { it.id == dest.id }) favoriteDestinations.removeAll { it.id == dest.id }
         else favoriteDestinations.add(dest)
@@ -215,26 +222,19 @@ class NotificationHelper(private val context: Context) {
 
     private fun setAlarm(alarmManager: AlarmManager, time: Long, visit: ScheduledVisit, requestCode: Int, title: String, body: String) {
         if (time < System.currentTimeMillis()) return
-
         val intent = Intent(context, NotificationReceiver::class.java).apply {
             putExtra("title", title)
             putExtra("body", body)
         }
         val pendingIntent = PendingIntent.getBroadcast(context, requestCode, intent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                if (alarmManager.canScheduleExactAlarms()) {
-                    alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pendingIntent)
-                } else {
-                    alarmManager.set(AlarmManager.RTC_WAKEUP, time, pendingIntent)
-                }
+                if (alarmManager.canScheduleExactAlarms()) alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pendingIntent)
+                else alarmManager.set(AlarmManager.RTC_WAKEUP, time, pendingIntent)
             } else {
                 alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, time, pendingIntent)
             }
-        } catch (e: SecurityException) {
-            alarmManager.set(AlarmManager.RTC_WAKEUP, time, pendingIntent)
-        }
+        } catch (e: SecurityException) { alarmManager.set(AlarmManager.RTC_WAKEUP, time, pendingIntent) }
     }
 }
 
@@ -242,22 +242,18 @@ class NotificationReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val title = intent.getStringExtra("title") ?: "Upcoming Trip"
         val body = intent.getStringExtra("body") ?: "Check your itinerary!"
-
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "trip_notifications"
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, "Trip Reminders", NotificationManager.IMPORTANCE_HIGH)
             notificationManager.createNotificationChannel(channel)
         }
-
         val notification = androidx.core.app.NotificationCompat.Builder(context, channelId)
             .setSmallIcon(android.R.drawable.ic_dialog_info)
             .setContentTitle(title)
             .setContentText(body)
             .setPriority(androidx.core.app.NotificationCompat.PRIORITY_HIGH)
             .build()
-
         notificationManager.notify(System.currentTimeMillis().toInt(), notification)
     }
 }
@@ -352,7 +348,6 @@ class MainActivity : ComponentActivity() {
                     SplashScreen()
                 } else {
                     if (isLoggedIn) {
-                        // Pass context to PlannerSystem
                         val planner = remember { PlannerSystem(authManager.getUserName(), authManager.getUserEmail(), context) }
                         MainApp(planner, isDarkMode, onToggleTheme = { isDarkMode = !isDarkMode }, onLogout = { authManager.logout(); isLoggedIn = false })
                     } else {
@@ -410,9 +405,8 @@ fun AuthScreen(authManager: AuthManager, onLoginSuccess: () -> Unit) {
 
         Button(
             onClick = {
-                if (email.isBlank() || password.isBlank() || (!isLoginMode && name.isBlank())) {
-                    errorMsg = "Please fill in all fields."
-                } else {
+                if (email.isBlank() || password.isBlank() || (!isLoginMode && name.isBlank())) errorMsg = "Please fill in all fields."
+                else {
                     isLoading = true
                     scope.launch {
                         CloudServices.syncUserDataToCloud()
@@ -451,13 +445,13 @@ fun MainApp(planner: PlannerSystem, isDarkMode: Boolean, onToggleTheme: () -> Un
 
     LaunchedEffect(Unit) {
         allDestinations = CloudServices.fetchDestinationsFromCMS()
-        // LOAD SAVED DATA AFTER FETCHING DESTINATIONS
         planner.loadSavedState(allDestinations)
         isDestinationsLoading = false
     }
 
     val bgResId = if (isDarkMode) R.drawable.bg_night else R.drawable.bg_morning
-    val overlayColor = if (isDarkMode) Color.Black.copy(alpha = 0.5f) else Color.White.copy(alpha = 0.2f)
+    // Lighter overlay so the glass effect is more visible over the background
+    val overlayColor = if (isDarkMode) Color.Black.copy(alpha = 0.3f) else Color.White.copy(alpha = 0.1f)
 
     if (showTerms) TermsAndPolicyDialog(onDismiss = { showTerms = false })
 
@@ -469,7 +463,12 @@ fun MainApp(planner: PlannerSystem, isDarkMode: Boolean, onToggleTheme: () -> Un
             containerColor = Color.Transparent,
             snackbarHost = { SnackbarHost(snackbarHostState) },
             bottomBar = {
-                NavigationBar(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f), tonalElevation = 8.dp) {
+                // Glassy Navigation Bar
+                NavigationBar(
+                    containerColor = if (isDarkMode) Color(0xFF1E293B).copy(alpha = 0.85f) else Color.White.copy(alpha = 0.85f),
+                    tonalElevation = 0.dp,
+                    modifier = Modifier.border(BorderStroke(1.dp, if (isDarkMode) GlassBorderDark else GlassBorderLight), RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+                ) {
                     NavigationBarItem(selected = selectedTab == 0, onClick = { selectedTab = 0 }, icon = { Icon(Icons.Default.Explore, contentDescription = null) }, label = { Text("Explore", fontSize = 10.sp) })
                     NavigationBarItem(selected = selectedTab == 1, onClick = { selectedTab = 1 }, icon = { Icon(Icons.Default.Favorite, contentDescription = null) }, label = { Text("Saved", fontSize = 10.sp) })
                     NavigationBarItem(
@@ -516,6 +515,7 @@ fun ExploreScreen(destinations: List<Destination>, planner: PlannerSystem, onDet
     var selectedCategory by remember { mutableStateOf("All") }
     var destinationToSchedule by remember { mutableStateOf<Destination?>(null) }
     val context = LocalContext.current
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
 
     if (destinationToSchedule != null) {
         ScheduleDestinationDialog(
@@ -537,14 +537,20 @@ fun ExploreScreen(destinations: List<Destination>, planner: PlannerSystem, onDet
     }
 
     Column(modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)) {
-        Text("Hi, ${planner.ownerName.split(" ").first()} 👋", fontSize = 16.sp, color = Color.White, modifier = Modifier.padding(top = 16.dp))
-        Text("Browse Destinations", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, modifier = Modifier.padding(bottom = 16.dp))
+        Text("Hi, ${planner.ownerName.split(" ").first()} 👋", fontSize = 16.sp, color = if(isDark) Color.White else Color(0xFF1E293B), modifier = Modifier.padding(top = 16.dp))
+        Text("Browse Destinations", fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = if(isDark) Color.White else Color(0xFF1E293B), modifier = Modifier.padding(bottom = 16.dp))
 
+        // Glassy Search Bar
         OutlinedTextField(
             value = searchQuery, onValueChange = { searchQuery = it }, modifier = Modifier.fillMaxWidth(),
             placeholder = { Text("Search destinations...") }, leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
             shape = RoundedCornerShape(16.dp),
-            colors = TextFieldDefaults.colors(focusedContainerColor = MaterialTheme.colorScheme.surface, unfocusedContainerColor = MaterialTheme.colorScheme.surface)
+            colors = TextFieldDefaults.colors(
+                focusedContainerColor = if (isDark) GlassDark else GlassWhite,
+                unfocusedContainerColor = if (isDark) GlassDark else GlassWhite,
+                focusedIndicatorColor = Color.Transparent,
+                unfocusedIndicatorColor = Color.Transparent
+            )
         )
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -552,7 +558,8 @@ fun ExploreScreen(destinations: List<Destination>, planner: PlannerSystem, onDet
             items(categories) { category ->
                 FilterChip(
                     selected = selectedCategory == category, onClick = { selectedCategory = category }, label = { Text(category) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primary, selectedLabelColor = Color.White, labelColor = Color.White)
+                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primary, selectedLabelColor = Color.White, labelColor = if(isDark) Color.White else Color(0xFF1E293B)),
+                    border = FilterChipDefaults.filterChipBorder(enabled = true, selected = false, borderColor = if(isDark) GlassBorderDark else GlassBorderLight)
                 )
             }
         }
@@ -573,7 +580,11 @@ fun ExploreScreen(destinations: List<Destination>, planner: PlannerSystem, onDet
 
 @Composable
 fun DestinationCard(dest: Destination, isAdded: Boolean, isFav: Boolean, onClick: () -> Unit, onFavToggle: () -> Unit, onAddToggle: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth().height(220.dp).clickable { onClick() }, shape = RoundedCornerShape(20.dp)) {
+    Card(
+        modifier = Modifier.fillMaxWidth().height(220.dp).clickable { onClick() },
+        shape = RoundedCornerShape(24.dp),
+        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.3f))
+    ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Image(painter = painterResource(id = dest.imageResId), contentDescription = dest.name, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Box(modifier = Modifier.fillMaxSize().background(Brush.verticalGradient(colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f)), startY = 300f)))
@@ -606,33 +617,32 @@ fun DestinationCard(dest: Destination, isAdded: Boolean, isFav: Boolean, onClick
 @Composable
 fun ItineraryScreen(planner: PlannerSystem, onDetails: (Destination) -> Unit) {
     val dateFormatter = DateFormat.getMediumDateFormat(LocalContext.current)
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Text("My Itinerary", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, modifier = Modifier.padding(16.dp))
+        Text("My Itinerary", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = if(isDark) Color.White else Color(0xFF1E293B), modifier = Modifier.padding(16.dp))
         LazyColumn(modifier = Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-            item { Text("Scheduled Places to Visit", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White) }
+            item { Text("Scheduled Places to Visit", fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if(isDark) Color.White else Color(0xFF1E293B)) }
             if (planner.scheduledVisits.isEmpty()) {
-                item { Text("Your itinerary is empty. Go to Explore to add places.", color = Color.White.copy(alpha=0.8f)) }
+                item { Text("Your itinerary is empty. Go to Explore to add places.", color = if(isDark) Color.White.copy(alpha=0.8f) else Color(0xFF1E293B)) }
             } else {
                 items(planner.scheduledVisits, key = { it.destination.id }) { visit ->
-                    Card(modifier = Modifier.clickable { onDetails(visit.destination) }, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))) {
-                        Column(modifier = Modifier.padding(12.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(visit.destination.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                                Spacer(modifier = Modifier.width(12.dp))
-                                Column(modifier = Modifier.weight(1f)) {
-                                    Text(visit.destination.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                    Text("${dateFormatter.format(visit.date)} at ${visit.time}", fontSize = 12.sp, color = TextGray)
-                                }
-                                IconButton(onClick = { planner.removeVisit(visit.destination) }) { Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.Red) }
+                    GlassCard(modifier = Modifier.fillMaxWidth().clickable { onDetails(visit.destination) }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(visit.destination.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(visit.destination.name, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                Text("${dateFormatter.format(visit.date)} at ${visit.time}", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
                             }
+                            IconButton(onClick = { planner.removeVisit(visit.destination) }) { Icon(Icons.Default.Delete, contentDescription = "Remove", tint = Color.Red) }
+                        }
 
-                            if (visit.selectedActivities.isNotEmpty()) {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text("Planned Activities:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = TextGray)
-                                visit.selectedActivities.forEach { act ->
-                                    Text("• ${act.name} (₱${act.price.toInt()})", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
-                                }
+                        if (visit.selectedActivities.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text("Planned Activities:", fontWeight = FontWeight.SemiBold, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
+                            visit.selectedActivities.forEach { act ->
+                                Text("• ${act.name} (₱${act.price.toInt()})", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
                             }
                         }
                     }
@@ -652,10 +662,10 @@ fun ScheduleDestinationDialog(destination: Destination, onDismiss: () -> Unit, o
     var showTimePicker by remember { mutableStateOf(false) }
     var selectedDate by remember { mutableStateOf<Date?>(null) }
     var selectedTime by remember { mutableStateOf<String?>(null) }
-
     val selectedActivities = remember { mutableStateListOf<Activity>() }
-
     val datePickerState = rememberDatePickerState()
+
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
 
     if (showDatePicker) {
         DatePickerDialog(onDismissRequest = { showDatePicker = false }, confirmButton = {
@@ -668,15 +678,30 @@ fun ScheduleDestinationDialog(destination: Destination, onDismiss: () -> Unit, o
     }
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(max = 600.dp),
+            colors = CardDefaults.cardColors(containerColor = if(isDark) Color(0xFF1E293B).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f)),
+            border = BorderStroke(1.dp, if(isDark) GlassBorderDark else GlassBorderLight)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text("Schedule Visit", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                Text(destination.name, fontSize = 14.sp, color = TextGray)
+                Text(destination.name, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
                 Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedButton(onClick = { showDatePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(if (selectedDate != null) DateFormat.getMediumDateFormat(LocalContext.current).format(selectedDate!!) else "Pick Date") }
+                OutlinedButton(
+                    onClick = { showDatePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, if(isDark) GlassBorderDark else GlassBorderLight)
+                ) { Text(if (selectedDate != null) DateFormat.getMediumDateFormat(LocalContext.current).format(selectedDate!!) else "Pick Date") }
+
                 Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(onClick = { showTimePicker = true }, modifier = Modifier.fillMaxWidth()) { Text(selectedTime ?: "Pick Time") }
+
+                OutlinedButton(
+                    onClick = { showTimePicker = true },
+                    modifier = Modifier.fillMaxWidth(),
+                    border = BorderStroke(1.dp, if(isDark) GlassBorderDark else GlassBorderLight)
+                ) { Text(selectedTime ?: "Pick Time") }
 
                 if (destination.activities.isNotEmpty()) {
                     Spacer(modifier = Modifier.height(16.dp))
@@ -688,9 +713,11 @@ fun ScheduleDestinationDialog(destination: Destination, onDismiss: () -> Unit, o
                             Row(modifier = Modifier.fillMaxWidth().clickable {
                                 if (isChecked) selectedActivities.remove(activity) else selectedActivities.add(activity)
                             }, verticalAlignment = Alignment.CenterVertically) {
-                                Checkbox(checked = isChecked, onCheckedChange = {
-                                    if (isChecked) selectedActivities.remove(activity) else selectedActivities.add(activity)
-                                })
+                                Checkbox(
+                                    checked = isChecked,
+                                    onCheckedChange = { if (isChecked) selectedActivities.remove(activity) else selectedActivities.add(activity) },
+                                    colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
+                                )
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text(activity.name, fontSize = 14.sp)
                                     Text("₱${activity.price.toInt()}", fontSize = 12.sp, color = MaterialTheme.colorScheme.primary)
@@ -721,11 +748,12 @@ fun ScheduleDestinationDialog(destination: Destination, onDismiss: () -> Unit, o
 @Composable
 fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss: () -> Unit) {
     val context = LocalContext.current
-
     var showAddReview by remember { mutableStateOf(false) }
     val reviews = CloudServices.destinationReviews[dest.id] ?: mutableListOf()
     var weatherInfo by remember { mutableStateOf<WeatherInfo?>(null) }
     LaunchedEffect(dest.id) { weatherInfo = CloudServices.fetchWeather(dest.latitude, dest.longitude) }
+
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
 
     if (showAddReview) {
         AddReviewDialog(
@@ -738,7 +766,7 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
         )
     }
 
-    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = MaterialTheme.colorScheme.surface) {
+    ModalBottomSheet(onDismissRequest = onDismiss, containerColor = if(isDark) Color(0xFF0F172A).copy(alpha = 0.95f) else Color.White.copy(alpha = 0.95f)) {
         LazyColumn(modifier = Modifier.padding(16.dp).padding(bottom = 32.dp)) {
             item {
                 Image(painter = painterResource(id = dest.imageResId), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(16.dp)))
@@ -746,25 +774,25 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
                 Text(dest.name, fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.LocationOn, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(16.dp))
-                    Text(dest.location, color = TextGray, fontSize = 14.sp)
+                    Text(dest.location, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f), fontSize = 14.sp)
                 }
                 Spacer(modifier = Modifier.height(12.dp))
                 Text(dest.description, fontSize = 15.sp, lineHeight = 24.sp, color = MaterialTheme.colorScheme.onSurface)
 
                 Spacer(modifier = Modifier.height(16.dp))
-                Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)) {
-                    Row(modifier = Modifier.padding(12.dp).fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                GlassCard(modifier = Modifier.fillMaxWidth()) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         if (weatherInfo != null) {
                             Icon(weatherInfo!!.icon, contentDescription = null, modifier = Modifier.size(32.dp), tint = AccentOrange)
                             Spacer(modifier = Modifier.width(12.dp))
                             Column {
-                                Text("Live Weather", fontSize = 12.sp, color = TextGray)
-                                Text("${weatherInfo!!.temp} • ${weatherInfo!!.condition}", fontWeight = FontWeight.Bold, fontSize = 16.sp)
+                                Text("Live Weather", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
+                                Text("${weatherInfo!!.temp} • ${weatherInfo!!.condition}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
                             }
                         } else {
-                            CircularProgressIndicator(modifier = Modifier.size(24.dp))
+                            CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.primary)
                             Spacer(modifier = Modifier.width(12.dp))
-                            Text("Fetching live weather...", fontSize = 14.sp)
+                            Text("Fetching live weather...", fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
                 }
@@ -772,13 +800,13 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
 
             item {
                 Spacer(modifier = Modifier.height(16.dp))
-                Text("Live Location Map", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Live Location Map", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(modifier = Modifier.height(8.dp))
 
                 val markerState = remember { MarkerState(position = LatLng(dest.latitude, dest.longitude)) }
                 val cameraPositionState = rememberCameraPositionState { position = CameraPosition.fromLatLngZoom(markerState.position, 12f) }
 
-                Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(12.dp))) {
+                Box(modifier = Modifier.fillMaxWidth().height(250.dp).clip(RoundedCornerShape(16.dp)).border(1.dp, if(isDark) GlassBorderDark else GlassBorderLight, RoundedCornerShape(16.dp))) {
                     GoogleMap(modifier = Modifier.fillMaxSize(), cameraPositionState = cameraPositionState) {
                         Marker(state = markerState, title = dest.name, snippet = dest.location)
                     }
@@ -789,18 +817,15 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
                     onClick = {
                         val gmmIntentUri = android.net.Uri.parse("google.navigation:q=${dest.latitude},${dest.longitude}")
                         val mapIntent = Intent(Intent.ACTION_VIEW, gmmIntentUri).apply { setPackage("com.google.android.apps.maps") }
-                        if (mapIntent.resolveActivity(context.packageManager) != null) {
-                            context.startActivity(mapIntent)
-                        } else {
-                            context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${dest.latitude},${dest.longitude}")))
-                        }
+                        if (mapIntent.resolveActivity(context.packageManager) != null) context.startActivity(mapIntent)
+                        else context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse("https://www.google.com/maps/dir/?api=1&destination=${dest.latitude},${dest.longitude}")))
                     },
                     modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp)
                 ) { Icon(Icons.Default.Directions, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Start Turn-by-Turn Navigation") }
             }
 
             item {
-                HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp))
+                HorizontalDivider(modifier = Modifier.padding(vertical = 24.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                     Text("Reviews (${reviews.size})", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     TextButton(onClick = { showAddReview = true }) { Text("Write a Review") }
@@ -808,10 +833,10 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
             }
 
             if (reviews.isEmpty()) {
-                item { Text("No reviews yet. Be the first to review!", color = TextGray, fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp)) }
+                item { Text("No reviews yet. Be the first to review!", color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f), fontSize = 14.sp, modifier = Modifier.padding(vertical = 8.dp)) }
             } else {
                 items(reviews) { review ->
-                    Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    GlassCard(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(review.author, fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                             Spacer(Modifier.weight(1f))
@@ -819,7 +844,7 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
                                 Icon(if (index < review.rating) Icons.Default.Star else Icons.Default.StarBorder, contentDescription = null, tint = AccentOrange, modifier = Modifier.size(14.dp))
                             }
                         }
-                        Text(review.comment, fontSize = 14.sp, color = TextGray)
+                        Text(review.comment, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.8f))
                     }
                 }
             }
@@ -828,7 +853,7 @@ fun DestinationDetailSheet(dest: Destination, planner: PlannerSystem, onDismiss:
 }
 
 // =====================================================
-// 10. FIXED TIME PICKER (Clickable AM/PM)
+// 10. HELPERS & OTHER SCREENS
 // =====================================================
 @Composable
 fun CustomTimePickerDialog(onDismiss: () -> Unit, onTimeSelected: (String) -> Unit) {
@@ -836,12 +861,18 @@ fun CustomTimePickerDialog(onDismiss: () -> Unit, onTimeSelected: (String) -> Un
     val minutes = (0..59).map { String.format("%02d", it) }
     var selectedPeriod by remember { mutableStateOf("AM") }
 
-    val hourState = rememberLazyListState(initialFirstVisibleItemIndex = 9) // Defaults to 10
-    val minuteState = rememberLazyListState(initialFirstVisibleItemIndex = 0) // Defaults to 00
+    val hourState = rememberLazyListState(initialFirstVisibleItemIndex = 9)
+    val minuteState = rememberLazyListState(initialFirstVisibleItemIndex = 0)
+
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = if(isDark) Color(0xFF1E293B).copy(alpha=0.95f) else Color.White.copy(alpha=0.95f)),
+            border = BorderStroke(1.dp, if(isDark) GlassBorderDark else GlassBorderLight)
+        ) {
+            Column(modifier = Modifier.padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
                 Text("Set Start Time", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
 
@@ -850,18 +881,17 @@ fun CustomTimePickerDialog(onDismiss: () -> Unit, onTimeSelected: (String) -> Un
                     Text(":", fontSize = 28.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(horizontal = 8.dp))
                     WheelPicker(items = minutes, state = minuteState, modifier = Modifier.weight(1f))
 
-                    // Clickable AM/PM instead of scroll wheel
                     Column(modifier = Modifier.weight(1f).fillMaxHeight(), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
                         Text("AM",
                             fontSize = if (selectedPeriod == "AM") 24.sp else 18.sp,
                             fontWeight = if (selectedPeriod == "AM") FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedPeriod == "AM") MaterialTheme.colorScheme.primary else TextGray,
+                            color = if (selectedPeriod == "AM") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f),
                             modifier = Modifier.clickable { selectedPeriod = "AM" }.padding(8.dp)
                         )
                         Text("PM",
                             fontSize = if (selectedPeriod == "PM") 24.sp else 18.sp,
                             fontWeight = if (selectedPeriod == "PM") FontWeight.Bold else FontWeight.Normal,
-                            color = if (selectedPeriod == "PM") MaterialTheme.colorScheme.primary else TextGray,
+                            color = if (selectedPeriod == "PM") MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f),
                             modifier = Modifier.clickable { selectedPeriod = "PM" }.padding(8.dp)
                         )
                     }
@@ -888,45 +918,44 @@ fun <T> WheelPicker(items: List<T>, state: androidx.compose.foundation.lazy.Lazy
             state = state,
             modifier = Modifier.fillMaxSize(),
             horizontalAlignment = Alignment.CenterHorizontally,
-            contentPadding = PaddingValues(vertical = 48.dp) // Adjusted to ensure scrolling works properly
+            contentPadding = PaddingValues(vertical = 48.dp)
         ) {
             items(items.size) { index ->
                 val isSelected = state.firstVisibleItemIndex == index
                 Text(
                     text = items[index].toString(), fontSize = if (isSelected) 24.sp else 18.sp,
                     fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (isSelected) MaterialTheme.colorScheme.primary else TextGray,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha=0.5f),
                     modifier = Modifier.padding(vertical = 4.dp)
                 )
             }
         }
-        Box(modifier = Modifier.fillMaxWidth().height(36.dp).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha=0.5f), RoundedCornerShape(8.dp)))
+        Box(modifier = Modifier.fillMaxWidth().height(36.dp).border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha=0.3f), RoundedCornerShape(8.dp)))
     }
 }
 
 @Composable
 fun PricesScreen(destinations: List<Destination>) {
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
     LazyColumn(modifier = Modifier.fillMaxSize().padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        item { Text("Price Guide & Activities", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = Color.White, modifier = Modifier.padding(bottom = 8.dp)) }
+        item { Text("Price Guide & Activities", fontSize = 24.sp, fontWeight = FontWeight.ExtraBold, color = if(isDark) Color.White else Color(0xFF1E293B), modifier = Modifier.padding(bottom = 8.dp)) }
         items(destinations) { dest ->
-            Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)), shape = RoundedCornerShape(12.dp)) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(dest.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                        Spacer(Modifier.width(8.dp))
-                        Text(dest.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text("Base Cost / Entrance:", fontSize = 12.sp, color = TextGray)
-                    Text("₱${"%.2f".format(dest.baseCost)}", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
-                    Text("Available Activities:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(Modifier.height(4.dp))
-                    dest.activities.forEach { activity ->
-                        Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                            Text(activity.name, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
-                            Text("₱${"%.2f".format(activity.price)}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
-                        }
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(dest.icon(), contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(dest.name, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = MaterialTheme.colorScheme.onSurface)
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Base Cost / Entrance:", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
+                Text("₱${"%.2f".format(dest.baseCost)}", fontWeight = FontWeight.SemiBold, fontSize = 16.sp, color = MaterialTheme.colorScheme.onSurface)
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
+                Text("Available Activities:", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                Spacer(Modifier.height(4.dp))
+                dest.activities.forEach { activity ->
+                    Row(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                        Text(activity.name, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
+                        Text("₱${"%.2f".format(activity.price)}", fontWeight = FontWeight.Bold, fontSize = 14.sp, color = MaterialTheme.colorScheme.primary)
                     }
                 }
             }
@@ -941,10 +970,16 @@ fun FavoritesScreen(planner: PlannerSystem, onDetails: (Destination) -> Unit) {
     } else {
         LazyVerticalGrid(columns = GridCells.Fixed(2), contentPadding = PaddingValues(16.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             items(planner.favoriteDestinations, key = { it.id }) { dest ->
-                Card(modifier = Modifier.clickable { onDetails(dest) }, shape = RoundedCornerShape(16.dp)) {
+                Card(
+                    modifier = Modifier.clickable { onDetails(dest) },
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, Color.White.copy(alpha=0.3f))
+                ) {
                     Column {
                         Image(painter = painterResource(id = dest.imageResId), contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.height(120.dp).fillMaxWidth())
-                        Text(dest.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, modifier = Modifier.padding(8.dp), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Box(modifier = Modifier.background(MaterialTheme.colorScheme.surface.copy(alpha=0.8f)).padding(8.dp).fillMaxWidth()) {
+                            Text(dest.name, fontWeight = FontWeight.Bold, fontSize = 14.sp, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurface)
+                        }
                     }
                 }
             }
@@ -957,61 +992,66 @@ fun ProfileScreen(planner: PlannerSystem, isDarkMode: Boolean, onToggleTheme: ()
     Column(modifier = Modifier.fillMaxSize().padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Spacer(modifier = Modifier.height(32.dp))
         Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(100.dp), tint = MaterialTheme.colorScheme.primary)
-        Text(planner.ownerName, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = Color.White)
-        Text(planner.ownerEmail, color = Color.White.copy(alpha = 0.8f))
+        Text(planner.ownerName, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = if(isDarkMode) Color.White else Color(0xFF1E293B))
+        Text(planner.ownerEmail, color = if(isDarkMode) Color.White.copy(alpha = 0.8f) else Color(0xFF1E293B).copy(alpha = 0.7f))
         Spacer(modifier = Modifier.height(32.dp))
 
-        Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f))) {
-            Column(modifier = Modifier.padding(16.dp)) {
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Saved Destinations", color = MaterialTheme.colorScheme.onSurface); Text("${planner.favoriteDestinations.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Itinerary Items", color = MaterialTheme.colorScheme.onSurface); Text("${planner.scheduledVisits.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                Row(modifier = Modifier.fillMaxWidth().clickable { onShowTerms() }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Terms & Privacy Policy", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
-                }
-                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                    Text("Dark Mode", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Switch(checked = isDarkMode, onCheckedChange = { onToggleTheme() })
-                }
+        GlassCard(modifier = Modifier.fillMaxWidth()) {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Saved Destinations", color = MaterialTheme.colorScheme.onSurface); Text("${planner.favoriteDestinations.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text("Itinerary Items", color = MaterialTheme.colorScheme.onSurface); Text("${planner.scheduledVisits.size}", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface) }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
+            Row(modifier = Modifier.fillMaxWidth().clickable { onShowTerms() }, horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Terms & Privacy Policy", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Icon(Icons.Default.ChevronRight, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+            }
+            HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.1f))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text("Dark Mode", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                Switch(checked = isDarkMode, onCheckedChange = { onToggleTheme() })
             }
         }
 
         Spacer(modifier = Modifier.weight(1f))
         OutlinedButton(
             onClick = onLogout, modifier = Modifier.fillMaxWidth().height(50.dp), shape = RoundedCornerShape(12.dp),
-            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red), border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red)
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red), border = BorderStroke(1.dp, Color.Red)
         ) { Icon(Icons.Default.Logout, contentDescription = null); Spacer(Modifier.width(8.dp)); Text("Log Out", fontWeight = FontWeight.Bold) }
     }
 }
 
 @Composable
 fun EmptyState(title: String, subtitle: String) {
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
     Column(modifier = Modifier.fillMaxSize().padding(32.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-        Icon(Icons.Default.SearchOff, contentDescription = null, modifier = Modifier.size(80.dp), tint = Color.White.copy(alpha = 0.5f))
+        Icon(Icons.Default.SearchOff, contentDescription = null, modifier = Modifier.size(80.dp), tint = if(isDark) Color.White.copy(alpha = 0.5f) else Color(0xFF1E293B).copy(alpha = 0.3f))
         Spacer(modifier = Modifier.height(16.dp))
-        Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = Color.White)
-        Text(subtitle, textAlign = TextAlign.Center, color = Color.White.copy(alpha = 0.8f))
+        Text(title, fontWeight = FontWeight.Bold, fontSize = 18.sp, color = if(isDark) Color.White else Color(0xFF1E293B))
+        Text(subtitle, textAlign = TextAlign.Center, color = if(isDark) Color.White.copy(alpha = 0.8f) else Color(0xFF1E293B).copy(alpha = 0.6f))
     }
 }
 
 @Composable
 fun TermsAndPolicyDialog(onDismiss: () -> Unit) {
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp), modifier = Modifier.fillMaxWidth().height(400.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier.fillMaxWidth().height(400.dp),
+            colors = CardDefaults.cardColors(containerColor = if(isDark) Color(0xFF1E293B).copy(alpha=0.95f) else Color.White.copy(alpha=0.95f)),
+            border = BorderStroke(1.dp, if(isDark) GlassBorderDark else GlassBorderLight)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text("Terms & Privacy Policy", fontSize = 20.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(bottom = 16.dp))
                 Column(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     LazyColumn {
                         item {
                             Text("1. Acceptance of Terms", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text("By using NasugBrowse, you agree to these terms. This app is an informational itinerary planner.", fontSize = 12.sp, color = TextGray, modifier = Modifier.padding(bottom = 12.dp))
+                            Text("By using NasugBrowse, you agree to these terms. This app is an informational itinerary planner.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f), modifier = Modifier.padding(bottom = 12.dp))
                             Text("2. User Accounts", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text("You are responsible for maintaining the confidentiality of your account details.", fontSize = 12.sp, color = TextGray, modifier = Modifier.padding(bottom = 12.dp))
+                            Text("You are responsible for maintaining the confidentiality of your account details.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f), modifier = Modifier.padding(bottom = 12.dp))
                             Text("3. Pricing & Accuracy", fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                            Text("Prices listed in the Price Guide are estimates. Actual costs may vary.", fontSize = 12.sp, color = TextGray)
+                            Text("Prices listed in the Price Guide are estimates. Actual costs may vary.", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha=0.7f))
                         }
                     }
                 }
@@ -1026,10 +1066,15 @@ fun TermsAndPolicyDialog(onDismiss: () -> Unit) {
 fun AddReviewDialog(onDismiss: () -> Unit, onSubmit: (Int, String) -> Unit) {
     var rating by remember { mutableIntStateOf(5) }
     var comment by remember { mutableStateOf("") }
+    val isDark = MaterialTheme.colorScheme.background == DarkColors.background
 
     androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
-        Card(shape = RoundedCornerShape(16.dp)) {
-            Column(modifier = Modifier.padding(16.dp)) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = if(isDark) Color(0xFF1E293B).copy(alpha=0.95f) else Color.White.copy(alpha=0.95f)),
+            border = BorderStroke(1.dp, if(isDark) GlassBorderDark else GlassBorderLight)
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
                 Text("Write a Review", fontSize = 20.sp, fontWeight = FontWeight.Bold)
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
@@ -1040,7 +1085,15 @@ fun AddReviewDialog(onDismiss: () -> Unit, onSubmit: (Int, String) -> Unit) {
                     }
                 }
                 Spacer(modifier = Modifier.height(16.dp))
-                OutlinedTextField(value = comment, onValueChange = { comment = it }, label = { Text("Share your experience...") }, modifier = Modifier.fillMaxWidth(), minLines = 3)
+                OutlinedTextField(
+                    value = comment, onValueChange = { comment = it },
+                    label = { Text("Share your experience...") },
+                    modifier = Modifier.fillMaxWidth(), minLines = 3,
+                    colors = TextFieldDefaults.colors(
+                        focusedContainerColor = Color.Transparent,
+                        unfocusedContainerColor = Color.Transparent
+                    )
+                )
                 Spacer(modifier = Modifier.height(16.dp))
                 Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                     TextButton(onClick = onDismiss) { Text("Cancel") }
