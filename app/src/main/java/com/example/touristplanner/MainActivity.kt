@@ -556,10 +556,30 @@ fun ExploreScreen(destinations: List<Destination>, planner: PlannerSystem, onDet
 
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(categories) { category ->
+                val isSelected = selectedCategory == category
                 FilterChip(
-                    selected = selectedCategory == category, onClick = { selectedCategory = category }, label = { Text(category) },
-                    colors = FilterChipDefaults.filterChipColors(selectedContainerColor = MaterialTheme.colorScheme.primary, selectedLabelColor = Color.White, labelColor = if(isDark) Color.White else Color(0xFF1E293B)),
-                    border = FilterChipDefaults.filterChipBorder(enabled = true, selected = false, borderColor = if(isDark) GlassBorderDark else GlassBorderLight)
+                    selected = isSelected,
+                    onClick = { selectedCategory = category },
+                    label = {
+                        Text(
+                            category,
+                            fontWeight = FontWeight.SemiBold,
+                            // Use white text for dark mode, dark text for light mode
+                            color = if (isDark) Color.White else Color(0xFF1E293B)
+                        )
+                    },
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primary,
+                        selectedLabelColor = Color.White,
+                        // Give unselected chips a solid frosted background
+                        containerColor = if (isDark) Color.Black.copy(alpha = 0.6f) else Color.White.copy(alpha = 0.85f),
+                    ),
+                    border = FilterChipDefaults.filterChipBorder(
+                        enabled = true,
+                        selected = isSelected,
+                        // Add a subtle border to make the glass effect pop
+                        borderColor = if (isDark) GlassBorderDark else GlassBorderLight
+                    )
                 )
             }
         }
