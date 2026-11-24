@@ -80,8 +80,9 @@ val TextGray = Color(0xFF64748B)
 
 val LightColors = lightColorScheme(primary = PrimaryBlue, secondary = AccentOrange, background = BgLight, surface = Color.White, onSurface = TextDark)
 val DarkColors = darkColorScheme(primary = Color(0xFF60A5FA), secondary = AccentOrange, background = Color(0xFF0F172A), surface = Color(0xFF1E293B), onSurface = Color(0xFFF1F5F9))
-
+//======================================
 // GLASSMORPHISM CONSTANTS
+//======================================
 val GlassWhite = Color.White.copy(alpha = 0.65f)
 val GlassDark = Color.Black.copy(alpha = 0.45f)
 val GlassBorderLight = Color.White.copy(alpha = 0.8f)
@@ -106,24 +107,64 @@ fun GlassCard(
     }
 }
 
-data class Review(val author: String, val rating: Int, val comment: String)
-data class Activity(val name: String, val price: Double)
-data class WeatherInfo(val temp: String, val condition: String, val icon: ImageVector)
-data class ScheduledVisit(val destination: Destination, val date: Date, val time: String, val selectedActivities: List<Activity>)
+data class Review(
+    val author: String,
+    val rating: Int,
+    val comment: String)
+data class Activity(
+    val name: String,
+    val price: Double)
+data class WeatherInfo(
+    val temp: String,
+    val condition: String,
+    val icon: ImageVector)
+
+//===================
+//OBJECT RELATIONSHIP
+//===================
+data class ScheduledVisit(
+    val destination: Destination,
+    val date: Date,
+    val time: String,
+    val selectedActivities: List<Activity>)
+
+//===========================================================
+//ABSTRACTION-ABSTRACTION-ABSTRACTION-ABSTRACTION-ABSTRACTION
+//===========================================================
 
 abstract class Destination(
-    val id: Int, val name: String, val location: String, open val baseCost: Double,
-    val rating: Double, val imageResId: Int, val description: String, val latitude: Double, val longitude: Double,
+    val id: Int,
+    val name: String,
+    val location: String,
+    open val baseCost: Double,
+    val rating: Double,
+    val imageResId: Int,
+    val description: String,
+    val latitude: Double,
+    val longitude: Double,
     val activities: List<Activity>
 ) {
     open fun category(): String = "General"
     open fun icon(): ImageVector = Icons.Default.Place
 }
 
-class Beach(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Beach"; override fun icon() = Icons.Default.BeachAccess }
+//===========================================================
+//INHERITANCE-INHERITANCE-INHERITANCE-INHERITANCE-INHERITANCE
+//===========================================================
+class Beach(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) {
+
+    //================================================================
+    //POLYMORPHISM-POLYMORPHISM-POLYMORPHISM-POLYMORPHISM-POLYMORPHISM
+    //================================================================
+    override fun category() = "Beach"; override fun icon() = Icons.Default.BeachAccess }
+
 class HistoricalSite(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, entryFee: Double, activities: List<Activity>) : Destination(id, name, location, baseCost + entryFee, rating, imageResId, description, lat, lng, activities) { override fun category() = "Historical"; override fun icon() = Icons.Default.AccountBalance }
 class AdventureSpot(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, difficulty: String, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Adventure"; override fun icon() = Icons.Default.Terrain }
 class Restaurant(id: Int, name: String, location: String, baseCost: Double, rating: Double, imageResId: Int, description: String, lat: Double, lng: Double, cuisine: String, activities: List<Activity>) : Destination(id, name, location, baseCost, rating, imageResId, description, lat, lng, activities) { override fun category() = "Food"; override fun icon() = Icons.Default.Restaurant }
+
+//=====================================================================
+//ENCAPSULATION-ENCAPSULATION-ENCAPSULATION-ENCAPSULATION-ENCAPSULATION
+//=====================================================================
 
 class PlannerSystem(val ownerName: String, val ownerEmail: String, private val context: Context) {
     val scheduledVisits = mutableStateListOf<ScheduledVisit>()
