@@ -70,7 +70,7 @@ import java.util.Calendar
 import java.util.Date
 
 // =====================================================
-// 1. THEME & MODELS
+// 1. APP THEME & MODELS
 // =====================================================
 val PrimaryBlue = Color(0xFF1E3A8A)
 val AccentOrange = Color(0xFFF59E0B)
@@ -81,12 +81,16 @@ val TextGray = Color(0xFF64748B)
 val LightColors = lightColorScheme(primary = PrimaryBlue, secondary = AccentOrange, background = BgLight, surface = Color.White, onSurface = TextDark)
 val DarkColors = darkColorScheme(primary = Color(0xFF60A5FA), secondary = AccentOrange, background = Color(0xFF0F172A), surface = Color(0xFF1E293B), onSurface = Color(0xFFF1F5F9))
 //======================================
-// GLASSMORPHISM CONSTANTS
+// GLASSMORPHISM DESIGNS
 //======================================
 val GlassWhite = Color.White.copy(alpha = 0.65f)
 val GlassDark = Color.Black.copy(alpha = 0.45f)
 val GlassBorderLight = Color.White.copy(alpha = 0.8f)
 val GlassBorderDark = Color.White.copy(alpha = 0.2f)
+
+//==============================
+//GLASS CARD (WITH GLASS EFFECT)
+//==============================
 
 @Composable
 fun GlassCard(
@@ -123,10 +127,10 @@ data class WeatherInfo(
 //OBJECT RELATIONSHIP
 //===================
 data class ScheduledVisit(
-    val destination: Destination,
+    val destination: Destination, // HAS-A RELATIONSHIP WITH DESTINATION
     val date: Date,
     val time: String,
-    val selectedActivities: List<Activity>)
+    val selectedActivities: List<Activity>) //HAS-MANY RELATIONSHIP WITH ACTIVITY
 
 //===========================================================
 //ABSTRACTION-ABSTRACTION-ABSTRACTION-ABSTRACTION-ABSTRACTION
@@ -317,23 +321,40 @@ object CloudServices {
     suspend fun fetchDestinationsFromCMS(): List<Destination> = withContext(Dispatchers.IO) {
         delay(1500)
         return@withContext listOf(
-            Beach(2, "Pico de Loro Beach", "Nasugbu, Batangas", 1500.0, 4.7, R.drawable.pico_de_loro, "A high-end beach club famous for its iconic 'parrot beak' rock formation.", 14.192139, 120.602222, listOf(Activity("Island Hopping", 500.0), Activity("Snorkeling", 300.0))),
-            Beach(5, "Munting Buhangin Beach", "Nasugbu, Batangas", 1500.0, 4.4, R.drawable.munting_buhangin, "A laid-back, family-friendly resort known for its fine grey sand.", 14.113222, 120.622444, listOf(Activity("Cottage Rental", 1000.0), Activity("Banana Boat", 350.0))),
-            Beach(8, "Kayraang Cove", "Brgy. Calayo, Nasugbu", 1200.0, 4.8, R.drawable.kayraang_cove, "A private, protected cove with raw and rugged beauty.", 14.162639, 120.596861, listOf(Activity("Camping Fee", 200.0), Activity("Tent Rental", 500.0))),
-            Beach(10, "Santelmo Cove", "Hamilo Coast, Nasugbu", 3000.0, 4.9, R.drawable.santelmo_cove, "A semi-secluded, pristine cove within the Hamilo Coast.", 14.205556, 120.594444, listOf(Activity("Boat Transfer", 1500.0), Activity("Snorkeling", 800.0))),
-            Beach(11, "Tali Beach", "Brgy. Balaytigue, Nasugbu", 1800.0, 4.6, R.drawable.tali_beach, "A private beach subdivision known for its cliff jump site.", 14.123982, 120.612279, listOf(Activity("Cliff Jumping Guide", 250.0), Activity("Volleyball", 150.0))),
-            Beach(16, "Natipuan White Sand", "Brgy. Natipuan, Nasugbu", 1800.0, 4.6, R.drawable.natipuan, "A sheltered, crescent-shaped coastal stretch known for fine cream-to-white sand.", 14.1174000, 120.6188000, listOf(Activity("Beach Entrance", 50.0), Activity("Table Rental", 300.0))),
-            Beach(17, "Pamana Resorts", "Brgy. Calayo, Nasugbu", 250.0, 4.7, R.drawable.pamana, "Pairs a laid-back public shoreline with a pet-friendly beachfront stay.", 14.152063, 120.609312, listOf(Activity("Day Tour", 250.0), Activity("Pet Fee", 100.0))),
-            Beach(12, "Canyon Cove", "Brgy. Wawa, Nasugbu", 2500.0, 4.8, R.drawable.canyon_cove, "A sheltered crescent cove framed by calm turquoise waters.", 14.0933, 120.6197, listOf(Activity("Water Park", 500.0), Activity("Paddle Boarding", 600.0))),
-            Beach(18, "Matabungkay", "Brgy. Matabungkay, Nasugbu", 2500.0, 4.8, R.drawable.matabungkay, "A popular, family-friendly spot best known for its shallow waters.", 13.9475, 120.6169, listOf(Activity("Balsa (Floating Cottage)", 1500.0), Activity("Banana Boat", 400.0))),
-            HistoricalSite(6, "Cape Santiago Lighthouse", "Nasugbu, Batangas", 300.0, 4.6, R.drawable.cape_santiago, "One of the oldest and tallest lighthouses in the Philippines.", 13.77139, 120.65250, 50.0, listOf(Activity("Entrance Fee", 50.0))),
-            HistoricalSite(9, "Caleruega Church", "Brgy. Kaylaway, Nasugbu", 250.0, 4.7, R.drawable.caleruega, "A stunning Romanesque-style chapel perched on a hill.", 14.072583, 120.835806, 50.0, listOf(Activity("Entrance Fee", 50.0), Activity("Shuttle", 100.0))),
-            HistoricalSite(14, "Nasugbu Municipal Hall", "Poblacion, Nasugbu", 0.0, 4.0, R.drawable.nasugbu_municipal, "The town center, which features a historic municipal hall.", 14.07429, 120.63249, 0.0, listOf(Activity("Walking Tour", 0.0))),
-            AdventureSpot(13, "Pico de Loro (Hike)", "Nasugbu, Batangas", 700.0, 4.7, R.drawable.pico_de_loro_hike, "A popular hiking destination for its distinctive 'parrot's beak' peak.", 14.2167, 120.6500, "Hard", listOf(Activity("Guide Fee", 600.0))),
-            AdventureSpot(3, "Mt. Batulao", "Nasugbu, Batangas", 800.0, 4.8, R.drawable.mt_batulao, "A popular hiking destination offering breathtaking 360-degree views.", 14.04500, 120.80444, "Moderate", listOf(Activity("Registration", 100.0), Activity("Camping", 300.0))),
-            AdventureSpot(4, "Mt. Talamitam", "Nasugbu, Batangas", 600.0, 4.5, R.drawable.mt_talamitam, "A beginner-friendly mountain known for its scenic grasslands.", 14.10778, 120.75972, "Easy", listOf(Activity("Guide Fee", 400.0))),
-            Restaurant(15, "Daddy Riz", "Nasugbu, Batangas", 350.0, 4.4, R.drawable.daddy_riz, "A must-visit for foodies serving the famous Batangas Lomi.", 14.0750, 120.6300, "Batangas Cuisine", listOf(Activity("Lomi Bowl", 150.0), Activity("Bulalo", 350.0))),
-            Restaurant(7, "Kainan sa Dalampasigan", "Nasugbu, Batangas", 800.0, 4.5, R.drawable.kainan_sa_dalampasigan, "A famous local dining spot serving authentic Batangas dishes.", 14.072139, 120.625194, "Batangas Cuisine", listOf(Activity("Inihaw na Liempo", 250.0), Activity("Sinigang", 400.0)))
+            Beach(2, "Pico de Loro Beach", "Nasugbu, Batangas", 1500.0, 4.7, R.drawable.pico_de_loro, "A high-end beach club famous for its iconic 'parrot beak' rock formation.",
+                14.1898, 120.5971, listOf(Activity("Island Hopping", 500.0), Activity("Snorkeling", 300.0))),
+            Beach(5, "Munting Buhangin Beach", "Nasugbu, Batangas", 1500.0, 4.4, R.drawable.munting_buhangin, "A laid-back, family-friendly resort known for its fine grey sand.",
+                14.1132, 120.6224, listOf(Activity("Cottage Rental", 1000.0), Activity("Banana Boat", 350.0))),
+            Beach(8, "Kayraang Cove", "Brgy. Calayo, Nasugbu", 1200.0, 4.8, R.drawable.kayraang_cove, "A private, protected cove with raw and rugged beauty.",
+                14.1626, 120.5968, listOf(Activity("Camping Fee", 200.0), Activity("Tent Rental", 500.0))),
+            Beach(10, "Santelmo Cove", "Hamilo Coast, Nasugbu", 3000.0, 4.9, R.drawable.santelmo_cove, "A semi-secluded, pristine cove within the Hamilo Coast.",
+                14.1919, 120.5856, listOf(Activity("Boat Transfer", 1500.0), Activity("Snorkeling", 800.0))),
+            Beach(11, "Tali Beach", "Brgy. Balaytigue, Nasugbu", 1800.0, 4.6, R.drawable.tali_beach, "A private beach subdivision known for its cliff jump site.",
+                14.1231, 120.5992, listOf(Activity("Cliff Jumping Guide", 250.0), Activity("Volleyball", 150.0))),
+            Beach(16, "Natipuan White Sand", "Brgy. Natipuan, Nasugbu", 1800.0, 4.6, R.drawable.natipuan, "A sheltered, crescent-shaped coastal stretch known for fine cream-to-white sand.",
+                14.1187, 120.6161, listOf(Activity("Beach Entrance", 50.0), Activity("Table Rental", 300.0))),
+            Beach(17, "Pamana Resorts", "Brgy. Calayo, Nasugbu", 250.0, 4.7, R.drawable.pamana, "Pairs a laid-back public shoreline with a pet-friendly beachfront stay.",
+                14.1520, 120.6093, listOf(Activity("Day Tour", 250.0), Activity("Pet Fee", 100.0))),
+            Beach(12, "Canyon Cove", "Brgy. Wawa, Nasugbu", 2500.0, 4.8, R.drawable.canyon_cove, "A sheltered crescent cove framed by calm turquoise waters.",
+                14.0886, 120.6175, listOf(Activity("Water Park", 500.0), Activity("Paddle Boarding", 600.0))),
+            Beach(18, "Matabungkay", "Brgy. Matabungkay, Nasugbu", 2500.0, 4.8, R.drawable.matabungkay, "A popular, family-friendly spot best known for its shallow waters.",
+                13.9517, 120.6198, listOf(Activity("Balsa (Floating Cottage)", 1500.0), Activity("Banana Boat", 400.0))),
+            HistoricalSite(6, "Cape Santiago Lighthouse", "Nasugbu, Batangas", 300.0, 4.6, R.drawable.cape_santiago, "One of the oldest and tallest lighthouses in the Philippines.",
+                13.7714, 120.6525, 50.0, listOf(Activity("Entrance Fee", 50.0))),
+            HistoricalSite(9, "Caleruega Church", "Brgy. Kaylaway, Nasugbu", 250.0, 4.7, R.drawable.caleruega, "A stunning Romanesque-style chapel perched on a hill.",
+                14.0715, 120.8358, 50.0, listOf(Activity("Entrance Fee", 50.0), Activity("Shuttle", 100.0))),
+            HistoricalSite(14, "Nasugbu Municipal Hall", "Poblacion, Nasugbu", 0.0, 4.0, R.drawable.nasugbu_municipal, "The town center, which features a historic municipal hall.",
+                14.0743, 120.6325, 0.0, listOf(Activity("Walking Tour", 0.0))),
+            AdventureSpot(13, "Pico de Loro (Hike)", "Nasugbu, Batangas", 700.0, 4.7, R.drawable.pico_de_loro_hike, "A popular hiking destination for its distinctive 'parrot's beak' peak.",
+                14.2142, 120.6464, "Hard", listOf(Activity("Guide Fee", 600.0))),
+            AdventureSpot(3, "Mt. Batulao", "Nasugbu, Batangas", 800.0, 4.8, R.drawable.mt_batulao, "A popular hiking destination offering breathtaking 360-degree views.",
+                14.0450, 120.8044, "Moderate", listOf(Activity("Registration", 100.0), Activity("Camping", 300.0))),
+            AdventureSpot(4, "Mt. Talamitam", "Nasugbu, Batangas", 600.0, 4.5, R.drawable.mt_talamitam, "A beginner-friendly mountain known for its scenic grasslands.",
+                14.1078, 120.7597, "Easy", listOf(Activity("Guide Fee", 400.0))),
+            Restaurant(15, "Daddy Riz", "Nasugbu, Batangas", 350.0, 4.4, R.drawable.daddy_riz, "A must-visit for foodies serving the famous Batangas Lomi.",
+                14.0644, 120.6338, "Batangas Cuisine", listOf(Activity("Lomi Bowl", 150.0), Activity("Bulalo", 350.0))),
+            Restaurant(7, "Kainan sa Dalampasigan", "Nasugbu, Batangas", 800.0, 4.5, R.drawable.kainan_sa_dalampasigan, "A famous local dining spot serving authentic Batangas dishes.",
+                14.0676253, 120.6277971, "Batangas Cuisine", listOf(Activity("Inihaw na Liempo", 250.0), Activity("Sinigang", 400.0)))
         )
     }
 
